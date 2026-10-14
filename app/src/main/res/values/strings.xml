@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Склейка файлов</string>
+    <string name="share_label">Соединить в «Склейке»</string>
+    <string name="open_label">Соединить части</string>
+</resources>
