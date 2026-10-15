@@ -1,0 +1,118 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+    paths: ['windows/**', '.github/workflows/windows.yml']
+    tags: ['windows-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: windows
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Version
+        run: |
+          if ("$env:GITHUB_REF" -like 'refs/tags/windows-v*') { $v = "$env:GITHUB_REF_NAME".Substring(9) } else { $v = "1.0.$env:GITHUB_RUN_NUMBER" }
+          "APP_VERSION=$v" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Fetch tools (APKEditor, apksigner, aapt2, adb) and build a minimal JRE
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force tools | Out-Null
+          gh release download V1.4.9 -R REAndroid/APKEditor -p "APKEditor-1.4.9.jar" -O tools/APKEditor.jar --clobber
+          $bt = Get-ChildItem "$env:ANDROID_HOME\build-tools" | Sort-Object { [version]($_.Name -replace '-.*','') } | Select-Object -Last 1
+          Write-Host "build-tools: $($bt.Name)"
+          Copy-Item "$($bt.FullName)\lib\apksigner.jar" tools/apksigner.jar
+          "AAPT2=$($bt.FullName)\aapt2.exe" | Out-File -Append $env:GITHUB_ENV
+          Invoke-WebRequest https://dl.google.com/android/repository/platform-tools-latest-windows.zip -OutFile pt.zip
+          Expand-Archive pt.zip -DestinationPath pt
+          New-Item -ItemType Directory -Force tools/adb | Out-Null
+          Copy-Item pt/platform-tools/adb.exe, pt/platform-tools/AdbWinApi.dll, pt/platform-tools/AdbWinUsbApi.dll, pt/platform-tools/NOTICE.txt tools/adb/
+          & "$env:JAVA_HOME\bin\jlink.exe" --add-modules java.base,java.desktop,java.xml,java.logging,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.zipfs --strip-debug --no-header-files --no-man-pages --compress=zip-9 --output tools/jre
+          if ($LASTEXITCODE -ne 0) { throw "jlink failed" }
+          Invoke-WebRequest https://raw.githubusercontent.com/REAndroid/APKEditor/master/LICENSE -OutFile tools/APKEditor-LICENSE.txt
+          Get-ChildItem tools -Recurse -File | Measure-Object Length -Sum | ForEach-Object { "tools: {0:N1} MB" -f ($_.Sum/1MB) }
+
+      - name: Unit tests (part detection, streaming join, real split-APK merge + apksigner + aapt2)
+        run: |
+          $env:SKLEJKA_JAVA = "$PWD\tools\jre\bin\java.exe"
+          $env:SKLEJKA_APKEDITOR = "$PWD\tools\APKEditor.jar"
+          $env:SKLEJKA_APKSIGNER = "$PWD\tools\apksigner.jar"
+          $env:SKLEJKA_AAPT2 = $env:AAPT2
+          dotnet test Sklejka.Tests -c Release --logger "console;verbosity=normal"
+          if ($LASTEXITCODE -ne 0) { throw "tests failed" }
+
+      - name: Publish app (self-contained win-x64)
+        run: |
+          dotnet publish Sklejka.App -c Release -r win-x64 --self-contained true -p:Version=$env:APP_VERSION -o publish
+          if ($LASTEXITCODE -ne 0) { throw "publish failed" }
+          Copy-Item -Recurse tools publish/tools
+          Remove-Item publish/*.pdb -ErrorAction SilentlyContinue
+
+      - name: Screenshots
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force dist/screens | Out-Null
+          $tabs = @('join','apk','split','settings')
+          for ($i = 0; $i -lt 4; $i++) {
+            $p = Start-Process publish/Sklejka.exe -ArgumentList "--tab $i --screenshot `"$PWD\dist\screens\$($tabs[$i]).png`"" -PassThru
+            if (-not $p.WaitForExit(60000)) { $p.Kill() }
+          }
+          $p = Start-Process publish/Sklejka.exe -ArgumentList "Sklejka.Tests\fixtures\sample.apks --screenshot `"$PWD\dist\screens\apk-loaded.png`"" -PassThru
+          if (-not $p.WaitForExit(60000)) { $p.Kill() }
+          Get-ChildItem dist/screens
+
+      - name: Installer (Inno Setup, per-user) and portable zip
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=$env:APP_VERSION" "/DSourceDir=$PWD\publish" installer\sklejka.iss
+          if ($LASTEXITCODE -ne 0) { throw "iscc failed" }
+          Compress-Archive -Path publish\* -DestinationPath "dist\Sklejka-Portable-$env:APP_VERSION.zip" -CompressionLevel Optimal
+          Get-ChildItem dist | ForEach-Object { "{0}  {1:N1} MB" -f $_.Name, ($_.Length/1MB) }
+          Get-FileHash dist\*.exe, dist\*.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Out-File -Encoding ascii dist\SHA256SUMS-windows.txt
+          if (Test-Path dist\screens) { Compress-Archive dist\screens\* dist\screenshots.zip }
+
+      - name: Upload artifact (best effort)
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: sklejka-windows
+          path: |
+            windows/dist/*.exe
+            windows/dist/*.zip
+            windows/dist/screens/*.png
+          retention-days: 3
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/windows-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = @(Get-ChildItem dist\*.exe, dist\*.zip, dist\SHA256SUMS-windows.txt | ForEach-Object FullName)
+          $files += @(Get-ChildItem dist\screens\*.png -ErrorAction SilentlyContinue | ForEach-Object FullName)
+          gh release view $env:GITHUB_REF_NAME 2>$null
+          if ($LASTEXITCODE -eq 0) { gh release upload $env:GITHUB_REF_NAME @files --clobber }
+          else { gh release create $env:GITHUB_REF_NAME @files --title "Склейка файлов для Windows $env:APP_VERSION" --notes-file RELEASE_NOTES_WINDOWS.md }

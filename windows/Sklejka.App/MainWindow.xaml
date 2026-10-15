@@ -1,0 +1,220 @@
+<Window x:Class="Sklejka.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Склейка файлов" Width="980" Height="760" MinWidth="720" MinHeight="560"
+        AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver" WindowStartupLocation="CenterScreen"
+        Icon="app.ico">
+    <Grid Margin="20,12,20,16">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" Margin="4,0,0,10">
+            <Image Source="app.ico" Width="32" Height="32" Margin="0,0,12,0"/>
+            <StackPanel>
+                <TextBlock Text="Склейка файлов" FontSize="26" FontWeight="SemiBold"/>
+                <TextBlock Text="Перетащите сюда части, папку, .apks, .xapk или .apkm" Style="{StaticResource Sub}"/>
+            </StackPanel>
+        </StackPanel>
+
+        <TabControl x:Name="Tabs" Grid.Row="1">
+            <!-- JOIN -->
+            <TabItem Header="Соединить">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,4,0">
+                    <StackPanel>
+                        <Border x:Name="ResumeCard" Style="{StaticResource Card}" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock Text="Прерванное соединение" Style="{StaticResource H}"/>
+                                <TextBlock x:Name="ResumeText" Style="{StaticResource Sub}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button Content="Продолжить" Click="OnResume" Style="{DynamicResource AccentButtonStyle}" Margin="0,0,8,0"/>
+                                    <Button Content="Забыть" Click="OnForgetResume"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Выберите части" Style="{StaticResource H}"/>
+                                <TextBlock Text="Можно выбрать все части, одну любую (остальные найдутся в той же папке) или целую папку." Style="{StaticResource Sub}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button Content="Файлы…" Click="OnPickParts" Style="{DynamicResource AccentButtonStyle}" MinWidth="120" Margin="0,0,8,0"/>
+                                    <Button Content="Папка…" Click="OnPickFolder" MinWidth="120" Margin="0,0,8,0"/>
+                                    <ComboBox x:Name="GroupBox" MinWidth="260" SelectionChanged="OnGroupChanged" Visibility="Collapsed"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="GroupCard" Style="{StaticResource Card}" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="GroupTitle" FontSize="22" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="GroupKind" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                                <TextBlock x:Name="GroupInfo" Margin="0,6,0,0" FontSize="15"/>
+                                <Border x:Name="WarnBox" CornerRadius="8" Padding="12" Margin="0,10,0,0" Background="#33E0533D" Visibility="Collapsed">
+                                    <TextBlock x:Name="WarnText" TextWrapping="Wrap"/>
+                                </Border>
+                                <DockPanel Margin="0,14,0,6">
+                                    <Button DockPanel.Dock="Right" Content="По номерам" Click="OnSortByNumber"/>
+                                    <TextBlock Text="Порядок частей — перетаскивайте мышью" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                </DockPanel>
+                                <ListBox x:Name="PartsList" MaxHeight="300" AllowDrop="True"
+                                         PreviewMouseLeftButtonDown="OnListMouseDown" PreviewMouseMove="OnListMouseMove" Drop="OnListDrop" DragOver="OnListDragOver">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <DockPanel Margin="2">
+                                                <Border DockPanel.Dock="Left" Width="30" Height="30" CornerRadius="15" Margin="0,0,12,0" Background="{DynamicResource AccentFillColorDefaultBrush}">
+                                                    <TextBlock Text="{Binding Number}" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" FontWeight="SemiBold"/>
+                                                </Border>
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding SizeText}" Opacity="0.7" VerticalAlignment="Center" Margin="12,0,4,0"/>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                    <Button x:Name="JoinBtn" Content="Соединить…" Click="OnJoin" Style="{DynamicResource AccentButtonStyle}" MinWidth="180" Height="40" Margin="0,0,8,0"/>
+                                    <Button x:Name="OpenFirstBtn" Content="Открыть первый том в архиваторе" Click="OnOpenFirst" Visibility="Collapsed"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="ResultCard" Style="{StaticResource Card}" Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock x:Name="ResultTitle" Style="{StaticResource H}"/>
+                                <TextBlock x:Name="ResultText" TextWrapping="Wrap"/>
+                                <TextBox x:Name="HashText" IsReadOnly="True" FontFamily="Cascadia Mono, Consolas" Margin="0,8,0,0" TextWrapping="Wrap" BorderThickness="0"/>
+                                <TextBlock x:Name="VerifyText" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                <WrapPanel Margin="0,10,0,0">
+                                    <Button Content="Открыть" Click="OnOpenResult" Margin="0,0,8,8"/>
+                                    <Button Content="Показать в папке" Click="OnShowResult" Margin="0,0,8,8"/>
+                                    <Button x:Name="ExtractBtn" Content="Распаковать zip…" Click="OnExtract" Margin="0,0,8,8"/>
+                                    <Button x:Name="ToApkBtn" Content="Это split-APK: склеить в один APK" Click="OnResultToApk" Margin="0,0,8,8"/>
+                                    <Button x:Name="DeletePartsBtn" Content="Удалить части" Click="OnDeleteParts" Margin="0,0,8,8"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- APK -->
+            <TabItem Header="APK">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,12,4,0">
+                    <StackPanel>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Split-APK → один APK" Style="{StaticResource H}"/>
+                                <TextBlock Style="{StaticResource Sub}" Text="Склеивает .apks (SAI, bundletool), .xapk (APKPure), .apkm (APKMirror) или папку с base.apk и split_config.*.apk в один APK, который ставится обычным образом. Части .apk.001 склеиваются на вкладке «Соединить»."/>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button Content="Файл .apks / .xapk / .apkm…" Click="OnPickBundle" Style="{DynamicResource AccentButtonStyle}" Margin="0,0,8,0"/>
+                                    <Button Content="Несколько .apk…" Click="OnPickApks" Margin="0,0,8,0"/>
+                                    <Button Content="Папка…" Click="OnPickApkFolder"/>
+                                </StackPanel>
+                                <TextBlock x:Name="ApkInput" Margin="0,10,0,0" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Подпись" Style="{StaticResource H}"/>
+                                <RadioButton x:Name="OwnKeyRadio" Content="Собственный ключ программы (создаётся один раз)" IsChecked="True" GroupName="k"/>
+                                <RadioButton x:Name="UserKeyRadio" Content="Мой ключ (.jks / .p12 / .keystore)" GroupName="k" Margin="0,4,0,0"/>
+                                <Grid Margin="28,8,0,0" IsEnabled="{Binding IsChecked, ElementName=UserKeyRadio}">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="140"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                    <TextBlock Text="Файл ключа" VerticalAlignment="Center"/>
+                                    <TextBox x:Name="KsPath" Grid.Column="1" Margin="0,2"/>
+                                    <Button Grid.Column="2" Content="…" Click="OnPickKeystore" Margin="6,2,0,2"/>
+                                    <TextBlock Grid.Row="1" Text="Пароль хранилища" VerticalAlignment="Center"/>
+                                    <PasswordBox x:Name="KsPass" Grid.Row="1" Grid.Column="1" Margin="0,2"/>
+                                    <TextBlock Grid.Row="2" Text="Псевдоним (alias)" VerticalAlignment="Center"/>
+                                    <TextBox x:Name="KsAlias" Grid.Row="2" Grid.Column="1" Margin="0,2"/>
+                                    <TextBlock Grid.Row="3" Text="Пароль ключа" VerticalAlignment="Center"/>
+                                    <PasswordBox x:Name="KeyPass" Grid.Row="3" Grid.Column="1" Margin="0,2" ToolTip="Пусто — как у хранилища"/>
+                                </Grid>
+                                <TextBlock Style="{StaticResource Sub}" Margin="0,10,0,0" Text="Подпись меняется: склеенный APK не обновит версию из Google Play — сначала удалите приложение с телефона."/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="MergeBtn" Content="Склеить APK…" Click="OnMergeApk" Style="{DynamicResource AccentButtonStyle}" MinWidth="180" Height="40" Margin="0,0,12,0"/>
+                                    <CheckBox x:Name="InstallCheck" Content="Установить на телефон по USB (adb)" VerticalAlignment="Center"/>
+                                    <Button Content="Обновить" Click="OnRefreshAdb" Margin="8,0,0,0"/>
+                                </StackPanel>
+                                <TextBlock x:Name="AdbText" Style="{StaticResource Sub}" Margin="0,8,0,0"/>
+                                <TextBox x:Name="ApkLog" IsReadOnly="True" Height="200" Margin="0,10,0,0" FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                                         VerticalScrollBarVisibility="Auto" TextWrapping="Wrap"/>
+                                <StackPanel x:Name="ApkResultButtons" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed">
+                                    <Button Content="Показать в папке" Click="OnShowApk" Margin="0,0,8,0"/>
+                                    <Button Content="Установить сейчас" Click="OnInstallNow"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- SPLIT -->
+            <TabItem Header="Разрезать">
+                <StackPanel Margin="0,12,4,0">
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Файл" Style="{StaticResource H}"/>
+                            <TextBlock x:Name="SplitFile" Margin="0,0,0,8"/>
+                            <Button Content="Выбрать файл…" Click="OnPickSplit" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Размер части" Style="{StaticResource H}"/>
+                            <StackPanel Orientation="Horizontal">
+                                <ComboBox x:Name="SizeBox" MinWidth="200" SelectionChanged="OnSplitParamsChanged"/>
+                                <TextBox x:Name="CustomMb" Width="120" Margin="8,0,0,0" TextChanged="OnSplitParamsChanged" ToolTip="Размер в МБ"/>
+                                <TextBlock Text="МБ (для «Свой»)" VerticalAlignment="Center" Margin="6,0,0,0" Opacity="0.7"/>
+                            </StackPanel>
+                            <TextBlock x:Name="SplitInfo" Margin="0,8,0,0"/>
+                            <CheckBox x:Name="CrcCheck" Content="Создать .crc для проверки (как Total Commander)" IsChecked="True" Margin="0,8,0,0"/>
+                            <Button x:Name="SplitBtn" Content="Выбрать папку и разрезать…" Click="OnSplit" Style="{DynamicResource AccentButtonStyle}" Height="40" Margin="0,12,0,0" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </TabItem>
+
+            <!-- SETTINGS -->
+            <TabItem Header="Настройки">
+                <StackPanel Margin="0,12,4,0">
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Тема" Style="{StaticResource H}"/>
+                            <ComboBox x:Name="ThemeBox" Width="220" HorizontalAlignment="Left" SelectionChanged="OnThemeChanged">
+                                <ComboBoxItem Content="Как в системе" Tag="System"/>
+                                <ComboBoxItem Content="Светлая" Tag="Light"/>
+                                <ComboBoxItem Content="Тёмная" Tag="Dark"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Проводник" Style="{StaticResource H}"/>
+                            <CheckBox x:Name="ShellCheck" Content="Пункт «Склеить» в меню .001, .apks, .xapk, .apkm и «Открыть с помощью»" Click="OnShellToggle"/>
+                            <TextBlock Style="{StaticResource Sub}" Margin="0,6,0,0" Text="Только для вашей учётной записи, права администратора не нужны. В Windows 11 пункт находится в «Показать дополнительные параметры»."/>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="После соединения" Style="{StaticResource H}"/>
+                            <CheckBox x:Name="DeleteCheck" Content="Показывать кнопку «Удалить части» (всегда с подтверждением)" Click="OnDeleteToggle"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock x:Name="AboutText" Style="{StaticResource Sub}" Margin="4,0,0,0"/>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+
+        <!-- progress bar -->
+        <Border x:Name="ProgressCard" Grid.Row="2" Style="{StaticResource Card}" Margin="0,10,0,0" Visibility="Collapsed">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Отмена" Click="OnCancel" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                <StackPanel>
+                    <TextBlock x:Name="ProgTitle" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                    <ProgressBar x:Name="Prog" Height="8" Maximum="1000" Margin="0,8"/>
+                    <TextBlock x:Name="ProgText" Opacity="0.8"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

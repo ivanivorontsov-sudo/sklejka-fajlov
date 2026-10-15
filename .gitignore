@@ -9,3 +9,10 @@ keystore/
 dist/
 *.apk
 .idea/
+windows/**/bin/
+windows/**/obj/
+windows/publish/
+windows/dist/
+windows/tools/
+windows/pt/
+windows/pt.zip

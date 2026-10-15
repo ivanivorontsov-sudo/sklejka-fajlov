@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Sklejka.Core/Sklejka.Core.csproj" />
+  <Project Path="Sklejka.App/Sklejka.App.csproj" />
+  <Project Path="Sklejka.Tests/Sklejka.Tests.csproj" />
+</Solution>
